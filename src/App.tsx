@@ -13,6 +13,15 @@ export default function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('fanpilot_theme') as 'dark' | 'light') || 'dark';
   });
+  const [apiStatus, setApiStatus] = useState<{ configured: boolean; model: string; provider: string } | null>(null);
+
+  // Check Gemini API Configuration Status
+  useEffect(() => {
+    fetch('/api/status')
+      .then((res) => res.json())
+      .then((data) => setApiStatus(data))
+      .catch((err) => console.error('Failed to fetch api status:', err));
+  }, []);
 
   // Apply theme to document element
   useEffect(() => {
@@ -79,13 +88,26 @@ export default function App() {
                 FP
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-lg font-light tracking-[0.2em] uppercase text-white">
                     FanPilot <span className="font-bold text-blue-400">AI</span>
                   </h1>
                   <span className="text-[9px] bg-white/5 border border-white/10 text-slate-300 font-bold px-2 py-0.5 rounded-md uppercase tracking-wider font-mono">
                     2026 World Cup
                   </span>
+                  {apiStatus && (
+                    <span 
+                      className={`text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider font-mono flex items-center gap-1.5 border ${
+                        apiStatus.configured 
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                          : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      }`}
+                      title={apiStatus.configured ? `Powered live by ${apiStatus.provider} (${apiStatus.model})` : "Running in local fallback mode (no API key)"}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${apiStatus.configured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                      <span>GENAI: {apiStatus.configured ? 'ACTIVE (GEMINI)' : 'SAFE MOCK'}</span>
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-400 font-medium tracking-wide">
                   Intelligent Multilingual & Navigation Companion

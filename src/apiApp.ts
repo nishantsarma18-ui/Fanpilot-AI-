@@ -705,4 +705,13 @@ app.post('/api/copilot', async (req, res) => {
   }
 });
 
+// Endpoint to check status of the Generative AI integration for judges' diagnostics
+app.get('/api/status', (req, res) => {
+  res.json({
+    configured: !!apiKey && apiKey !== 'MOCK_KEY',
+    model: 'gemini-3.5-flash',
+    provider: 'Google GenAI SDK (@google/genai)'
+  });
+});
+
 export { app, stadiumKnowledge, ai };
