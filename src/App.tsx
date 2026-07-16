@@ -4,12 +4,33 @@ import CityGuide from './components/CityGuide';
 import SlangPhrasebook from './components/SlangPhrasebook';
 import MatchNavigation from './components/MatchNavigation';
 import StadiumCopilot from './components/StadiumCopilot';
-import { Compass, MessageSquare, BookOpen, MapPin, Sparkles, ShieldCheck } from 'lucide-react';
+import { Compass, MessageSquare, BookOpen, MapPin, Sparkles, ShieldCheck, Sun, Moon } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function App() {
   const [selectedCityId, setSelectedCityId] = useState<string>('mexico_city');
   const [activeTab, setActiveTab] = useState<'cities' | 'language' | 'navigation' | 'copilot'>('cities');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    return (localStorage.getItem('fanpilot_theme') as 'dark' | 'light') || 'dark';
+  });
+
+  // Apply theme to document element
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light');
+      root.classList.remove('dark');
+    } else {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('fanpilot_theme', newTheme);
+  };
 
   // Load selected city from localStorage if saved
   useEffect(() => {
@@ -72,24 +93,42 @@ export default function App() {
               </div>
             </div>
 
-            {/* Dynamic context selector */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 self-start md:self-auto bg-white/5 border border-white/10 p-2 rounded-2xl">
-              <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold px-2 font-mono">
-                <MapPin size={14} className="text-blue-400" />
-                <span>LIVE HOST CITY:</span>
+            {/* Dynamic controls: Selector & Theme Toggle */}
+            <div className="flex items-center gap-3 self-start md:self-auto">
+              {/* Dynamic context selector */}
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white/5 border border-white/10 p-2 rounded-2xl">
+                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold px-2 font-mono">
+                  <MapPin size={14} className="text-blue-400" />
+                  <span>LIVE HOST CITY:</span>
+                </div>
+                <select
+                  value={selectedCityId}
+                  onChange={(e) => handleCityChange(e.target.value)}
+                  className="bg-zinc-900 border border-white/10 text-xs font-semibold text-white rounded-xl p-2 focus:ring-1 focus:ring-blue-400 focus:outline-hidden cursor-pointer"
+                  id="header-city-selector"
+                >
+                  {hostCities.map((city) => (
+                    <option key={city.id} value={city.id} className="bg-[#0a0a0a] text-slate-100">
+                      {getCountryFlag(city.country)} {city.name} ({city.stadium})
+                    </option>
+                  ))}
+                </select>
               </div>
-              <select
-                value={selectedCityId}
-                onChange={(e) => handleCityChange(e.target.value)}
-                className="bg-zinc-900 border border-white/10 text-xs font-semibold text-white rounded-xl p-2 focus:ring-1 focus:ring-blue-400 focus:outline-hidden cursor-pointer"
-                id="header-city-selector"
+
+              {/* Theme toggle button */}
+              <button
+                onClick={toggleTheme}
+                className="p-3 rounded-2xl bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 hover:scale-105 transition-all flex items-center justify-center cursor-pointer"
+                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                id="theme-toggle-btn"
+                aria-label="Toggle theme"
               >
-                {hostCities.map((city) => (
-                  <option key={city.id} value={city.id} className="bg-[#0a0a0a] text-slate-100">
-                    {getCountryFlag(city.country)} {city.name} ({city.stadium})
-                  </option>
-                ))}
-              </select>
+                {theme === 'dark' ? (
+                  <Sun size={15} className="text-amber-400" />
+                ) : (
+                  <Moon size={15} className="text-blue-500" />
+                )}
+              </button>
             </div>
 
           </div>
