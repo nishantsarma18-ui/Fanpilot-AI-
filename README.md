@@ -146,5 +146,26 @@ Ensure you have **Node.js 18+** installed on your system.
 
 ---
 
+## ☁️ Netlify Serverless Deployment
+
+FanPilot AI is fully optimized and pre-configured for a seamless deployment on **Netlify** utilizing modern Serverless Functions:
+
+1. **How it works**:
+   * **Frontend**: Netlify compiles the Vite application and hosts the static files from the `dist/` folder.
+   * **Backend**: Netlify compiles and hosts the Express API (`src/apiApp.ts`) as a serverless lambda function using the pre-configured `netlify/functions/api.ts` handler powered by `serverless-http`.
+   * **Rewrites**: The `netlify.toml` file automatically proxies any `/api/*` frontend request to the backend function `/.netlify/functions/api/*`, keeping the identical production URL format with zero modifications required.
+
+2. **Deploying to Netlify**:
+   * Connect your GitHub repository to Netlify.
+   * Configure the **Build Settings**:
+     * **Build command**: `npm run build`
+     * **Publish directory**: `dist`
+     * **Functions directory**: `netlify/functions`
+   * Configure the **Environment Variables** in the Netlify Dashboard (under Site Settings > Environment Variables):
+     * Add `GEMINI_API_KEY` = *Your Google Gemini API Key*
+     * Netlify serverless functions will read this key securely in the backend, completely hidden from client browsers.
+
+---
+
 ## ⚽ Legals
 This application is an independent international travel aid designed specifically for supporters attending the matches. It has no affiliation, license, or endorsement from FIFA, national teams, or official arena operators.
