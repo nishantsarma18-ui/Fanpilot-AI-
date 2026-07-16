@@ -11,6 +11,12 @@ app.use(express.json());
 
 // Middleware to normalize Netlify serverless function path routing and direct to Express api handlers
 app.use((req, res, next) => {
+  // Add robust security headers to protect against clickjacking, sniff attacks, and cross-site scripting
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
   if (req.url.startsWith('/.netlify/functions/api')) {
     req.url = req.url.replace('/.netlify/functions/api', '/api');
   } else if (!req.url.startsWith('/api') && (req.url.startsWith('/copilot') || req.url.startsWith('/translate') || req.url.startsWith('/navigation'))) {
@@ -18,6 +24,20 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Helper to safely clean and parse JSON response from LLM, removing any markdown formatting backticks
+export function parseCleanJson(text: string): any {
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```json')) {
+    cleaned = cleaned.substring(7);
+  } else if (cleaned.startsWith('```')) {
+    cleaned = cleaned.substring(3);
+  }
+  if (cleaned.endsWith('```')) {
+    cleaned = cleaned.substring(0, cleaned.length - 3);
+  }
+  return JSON.parse(cleaned.trim());
+}
 
 // Function to load the Gemini API key from multiple sources with high convenience for Netlify and custom deployments
 export function loadApiKey(): string | undefined {
@@ -126,25 +146,41 @@ const stadiumKnowledge: Record<string, string> = {
 
 // 1. Translation & Slang Coach API
 app.post('/api/translate', async (req, res) => {
-  const { text, sourceLang, targetLang, cityId } = req.body;
+  let { text, sourceLang, targetLang, cityId } = req.body;
 
-  if (!text) {
+  if (!text || typeof text !== 'string') {
     return res.status(400).json({ error: 'Text is required for translation' });
   }
+
+  // Security: strict input validation & length limits to prevent DoS, token overflow, or prompt injection
+  text = text.substring(0, 1000).trim();
+  sourceLang = typeof sourceLang === 'string' ? sourceLang.substring(0, 50).trim() : 'English';
+  targetLang = typeof targetLang === 'string' ? targetLang.substring(0, 50).trim() : 'Mexican Spanish';
+  cityId = typeof cityId === 'string' ? cityId.substring(0, 50).trim() : '';
 
   const hostContext = cityId ? `grounded in the culture of host city ${cityId}` : 'general football tournament context';
 
   const systemInstruction = `
     You are an expert multilingual translator and football culture guide for the FIFA World Cup 2026.
-    Translate the user's text from ${sourceLang || 'detect language'} into ${targetLang || 'Mexican Spanish'}.
+    Translate the user's text from ${sourceLang} into ${targetLang}.
     The translation must feel natural, authentic, and utilize local dialect, local slang terms, and football terms popular in the target country (USA, Mexico, or Canada).
     
     Structure your response as a valid JSON object with the following properties:
     - translation: The natural translated text.
-    - phonetic: A friendly phonetic pronunciation guide for speakers of ${sourceLang || 'English'}.
+    - phonetic: A friendly phonetic pronunciation guide for speakers of ${sourceLang}.
     - contextExplanation: Cultural context about the phrase, explaining any local slang, idioms, or cultural nuances used.
     - footballTermTip: A useful tip or interesting fact related to football culture, food, or fans in that location.
   `;
+
+  // Offline fallback if no valid api key
+  if (!apiKey || apiKey === 'MOCK_KEY') {
+    return res.json({
+      translation: text,
+      phonetic: "N/A",
+      contextExplanation: `Offline/Mock mode: "${text}" is displayed directly. Enter a valid GEMINI_API_KEY to receive real-time, context-aware local dialect translation.`,
+      footballTermTip: "Tip: Football is a universal language! Smile, use hand gestures, and share a cheering toast."
+    });
+  }
 
   try {
     const response = await ai.models.generateContent({
@@ -171,30 +207,36 @@ app.post('/api/translate', async (req, res) => {
       throw new Error('No content returned from Gemini API');
     }
 
-    const data = JSON.parse(resultText);
+    const data = parseCleanJson(resultText);
     res.json(data);
   } catch (error: any) {
     console.error('Translation error:', error);
-    res.status(500).json({
-      error: 'Failed to translate',
-      message: error.message,
-      fallback: {
-        translation: text,
-        phonetic: "N/A",
-        contextExplanation: "Offline fallback: Check your internet connection or API key configuration in settings.",
-        footballTermTip: "Tip: Football is a universal language! Smile, use hand gestures, and share a cheering toast."
-      }
+    // Return 200 OK with local fallback so the user interface renders successfully without a fatal crash/offline error
+    res.json({
+      translation: text,
+      phonetic: "N/A",
+      contextExplanation: "Translation service is currently offline. Showing fallback translation. (Check your API key configuration in settings)",
+      footballTermTip: "Tip: Football is a universal language! Smile, use hand gestures, and share a cheering toast."
     });
   }
 });
 
 // 2. Intelligent Match-Day Navigation & Transit Planner API
 app.post('/api/navigation', async (req, res) => {
-  const { cityId, stadiumName, hotelLocation, transportMode, matchTime, fanStyle } = req.body;
+  let { cityId, stadiumName, hotelLocation, transportMode, matchTime, fanStyle } = req.body;
 
-  if (!cityId || !stadiumName || !hotelLocation) {
-    return res.status(400).json({ error: 'Missing required parameters: cityId, stadiumName, and hotelLocation are required.' });
+  if (!cityId || !stadiumName || !hotelLocation || 
+      typeof cityId !== 'string' || typeof stadiumName !== 'string' || typeof hotelLocation !== 'string') {
+    return res.status(400).json({ error: 'Missing or invalid required parameters: cityId, stadiumName, and hotelLocation are required.' });
   }
+
+  // Security: input validation and length limits to prevent token-bloat or prompt injection attacks
+  cityId = cityId.substring(0, 50).trim();
+  stadiumName = stadiumName.substring(0, 100).trim();
+  hotelLocation = hotelLocation.substring(0, 200).trim();
+  transportMode = typeof transportMode === 'string' ? transportMode.substring(0, 50).trim() : 'Public Transit';
+  matchTime = typeof matchTime === 'string' ? matchTime.substring(0, 10).trim() : '18:00';
+  fanStyle = typeof fanStyle === 'string' ? fanStyle.substring(0, 20).trim() : 'balanced';
 
   const stadiumRules = stadiumKnowledge[cityId] || 'General FIFA rules apply.';
 
@@ -206,9 +248,9 @@ app.post('/api/navigation', async (req, res) => {
     - Host City: ${cityId}
     - Stadium: ${stadiumName}
     - Starting location (Hotel/Hotspot): ${hotelLocation}
-    - Transport mode selected: ${transportMode || 'Public Transit'}
-    - Match Kick-off Time: ${matchTime || '18:00'}
-    - Fan travel style: ${fanStyle || 'balanced'} (options: 'early_bird' - tailgates 4 hours early, 'balanced' - arrives 1.5 hours early, 'efficient' - arrives right before kickoff)
+    - Transport mode selected: ${transportMode}
+    - Match Kick-off Time: ${matchTime}
+    - Fan travel style: ${fanStyle} (options: 'early_bird' - tailgates 4 hours early, 'balanced' - arrives 1.5 hours early, 'efficient' - arrives right before kickoff)
     
     Grounded stadium logistics:
     ${stadiumRules}
@@ -224,6 +266,56 @@ app.post('/api/navigation', async (req, res) => {
     - type: One of 'transit' (for travel/walking), 'stadium' (for gate/entry/seats), 'social' (for food/tailgating), 'match' (for kickoff/half-time)
     - completed: boolean (set to false)
   `;
+
+  // Return a direct offline fallback if no API key is set
+  if (!apiKey || apiKey === 'MOCK_KEY') {
+    const fallbackTime = matchTime;
+    const hour = parseInt(fallbackTime.split(':')[0]) || 18;
+    const min = fallbackTime.split(':')[1] || '00';
+
+    return res.json([
+      {
+        id: 'fallback_1',
+        time: `${hour - 3}:${min}`,
+        activity: `Leave hotel at ${hotelLocation} and head to transit using ${transportMode}. Carry only clear bags.`,
+        location: hotelLocation,
+        type: 'transit',
+        completed: false
+      },
+      {
+        id: 'fallback_2',
+        time: `${hour - 2}:${min}`,
+        activity: `Arrive near ${stadiumName}. Follow volunteer signs towards security gates. Keep ticket QR code ready on phone.`,
+        location: `${stadiumName} Outer Plaza`,
+        type: 'transit',
+        completed: false
+      },
+      {
+        id: 'fallback_3',
+        time: `${hour - 1}:15`,
+        activity: `Pass through security screening and bag checks. Scan ticket to enter stadium concourse.`,
+        location: `${stadiumName} Security Gates`,
+        type: 'stadium',
+        completed: false
+      },
+      {
+        id: 'fallback_4',
+        time: `${hour - 0}:45`,
+        activity: `Locate food/drink concession stands and pick up local World Cup specialties! Then navigate to your seat row.`,
+        location: `${stadiumName} Concourse`,
+        type: 'social',
+        completed: false
+      },
+      {
+        id: 'fallback_5',
+        time: fallbackTime,
+        activity: `KICKOFF! Enjoy the electric World Cup atmosphere and cheer responsibly!`,
+        location: `${stadiumName} Seats`,
+        type: 'match',
+        completed: false
+      }
+    ]);
+  }
 
   try {
     const response = await ai.models.generateContent({
@@ -255,14 +347,14 @@ app.post('/api/navigation', async (req, res) => {
       throw new Error('No timeline returned from Gemini API');
     }
 
-    const data = JSON.parse(resultText);
+    const data = parseCleanJson(resultText);
     res.json(data);
   } catch (error: any) {
     console.error('Itinerary generation error:', error);
     // Return a solid fallback schedule so the user is never left hanging
     const fallbackTime = matchTime || '18:00';
-    const hour = parseInt(fallbackTime.split(':')[0]);
-    const min = fallbackTime.split(':')[1];
+    const hour = parseInt(fallbackTime.split(':')[0]) || 18;
+    const min = fallbackTime.split(':')[1] || '00';
 
     res.json([
       {
@@ -549,13 +641,22 @@ export function getSmartLocalResponse(query: string, cityId: string): string {
 }
 
 app.post('/api/copilot', async (req, res) => {
-  const { messages, cityId } = req.body;
+  let { messages, cityId } = req.body;
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Messages array is required' });
   }
 
-  const lastMessageText = messages[messages.length - 1]?.text || "";
+  // Security: limit chat history length and individual message lengths to prevent DoS/token exhaustion
+  const sanitizedMessages = messages.slice(-10).map((msg: any) => {
+    return {
+      sender: typeof msg.sender === 'string' && msg.sender === 'user' ? 'user' : 'assistant',
+      text: typeof msg.text === 'string' ? msg.text.substring(0, 1000).trim() : ''
+    };
+  });
+
+  cityId = typeof cityId === 'string' ? cityId.substring(0, 50).trim() : '';
+  const lastMessageText = sanitizedMessages[sanitizedMessages.length - 1]?.text || "";
 
   // If no GEMINI_API_KEY is configured or it is the mock key, directly use the premium local fallback
   if (!apiKey || apiKey === 'MOCK_KEY') {
@@ -581,7 +682,7 @@ app.post('/api/copilot', async (req, res) => {
   `;
 
   // Map messages to Gemini SDK contents format
-  const contents = messages.map(msg => ({
+  const contents = sanitizedMessages.map(msg => ({
     role: msg.sender === 'user' ? 'user' : 'model',
     parts: [{ text: msg.text }]
   }));

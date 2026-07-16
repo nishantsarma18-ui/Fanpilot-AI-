@@ -202,7 +202,19 @@ export default function App() {
         <div className="min-h-[450px]">
           {activeTab === 'cities' && (
             <div role="tabpanel" id="cities-tab-panel" aria-labelledby="tab-cities">
-              <CityGuide onSelectCity={handleCityChange} selectedCityId={selectedCityId} />
+              <CityGuide 
+                onSelectCity={handleCityChange} 
+                onBuildTimeline={(cityId) => {
+                  handleCityChange(cityId);
+                  setActiveTab('navigation');
+                  // Smoothly scroll down to the navigation planner form
+                  setTimeout(() => {
+                    const el = document.getElementById('navigation-planner-section');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 100);
+                }}
+                selectedCityId={selectedCityId} 
+              />
             </div>
           )}
           {activeTab === 'language' && (

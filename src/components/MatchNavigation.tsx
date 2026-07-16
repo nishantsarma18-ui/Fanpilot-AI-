@@ -23,6 +23,14 @@ export default function MatchNavigation({ selectedCityId }: MatchNavigationProps
   const [resolvedSeating, setResolvedSeating] = useState<{ zone: string; gate: string; tip: string } | null>(null);
   const [alarms, setAlarms] = useState<string[]>([]); // Array of step IDs with active notifications
 
+  // Sync selectedMatchId when the selected city changes to prevent showing mismatched matches
+  useEffect(() => {
+    const freshMatches = matches.filter((m) => m.cityId === selectedCityId);
+    if (freshMatches.length > 0) {
+      setSelectedMatchId(freshMatches[0].id);
+    }
+  }, [selectedCityId]);
+
   // Load existing itinerary from localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`itinerary_${selectedCityId}`);

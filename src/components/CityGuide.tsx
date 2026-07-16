@@ -6,10 +6,11 @@ import { motion } from 'motion/react';
 
 interface CityGuideProps {
   onSelectCity: (cityId: string) => void;
+  onBuildTimeline: (cityId: string) => void;
   selectedCityId: string;
 }
 
-export default function CityGuide({ onSelectCity, selectedCityId }: CityGuideProps) {
+export default function CityGuide({ onSelectCity, onBuildTimeline, selectedCityId }: CityGuideProps) {
   const [activeTab, setActiveTab] = useState<'all' | 'USA' | 'Mexico' | 'Canada'>('all');
 
   const filteredCities = hostCities.filter(
@@ -196,8 +197,9 @@ export default function CityGuide({ onSelectCity, selectedCityId }: CityGuidePro
               <p className="text-[11px] text-zinc-400">Generate a custom schedule from your hotel to {selectedCity.stadium}.</p>
             </div>
             <button
-              onClick={() => onSelectCity(selectedCity.id)}
+              onClick={() => onBuildTimeline(selectedCity.id)}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow-md transition-all flex items-center gap-1.5 uppercase tracking-wider"
+              id="build-timeline-btn"
             >
               <span>Build Timeline</span>
               <ArrowRight size={13} />
