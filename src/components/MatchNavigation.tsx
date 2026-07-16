@@ -248,7 +248,7 @@ export default function MatchNavigation({ selectedCityId }: MatchNavigationProps
                   <label className="block text-xs font-semibold text-zinc-400">Fan Timing Style</label>
                   <select
                     value={fanStyle}
-                    onChange={(e) => setFanStyle(e.target.value as any)}
+                    onChange={(e) => setFanStyle(e.target.value as 'early_bird' | 'balanced' | 'efficient')}
                     className="w-full bg-[#0a0a0a] border border-white/10 text-white rounded-xl p-3 text-sm focus:ring-1 focus:ring-blue-400 focus:outline-hidden font-medium"
                   >
                     <option value="balanced" className="bg-[#050505]">⏱️ Balanced (1.5h early)</option>

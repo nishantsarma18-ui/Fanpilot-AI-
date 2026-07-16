@@ -184,7 +184,7 @@ export default function App() {
                 aria-selected={isSelected}
                 aria-controls={`${tab.id}-tab-panel`}
                 id={`tab-${tab.id}`}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as 'cities' | 'language' | 'navigation' | 'copilot')}
                 className={`flex items-center gap-2 pb-3.5 text-xs font-bold uppercase tracking-wider transition-all border-b-2 cursor-pointer whitespace-nowrap ${
                   isSelected
                     ? 'border-blue-400 text-blue-400'

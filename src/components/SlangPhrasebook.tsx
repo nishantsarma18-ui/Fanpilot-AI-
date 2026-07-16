@@ -27,6 +27,7 @@ export default function SlangPhrasebook({ selectedCityId }: SlangPhrasebookProps
 
   const [speakerLang, setSpeakerLang] = useState<string>('');
   const [speechSuccess, setSpeechSuccess] = useState<string | null>(null);
+  const [speechError, setSpeechError] = useState<string | null>(null);
 
   // Get active phrases
   const cityPhrases = phrasebookData[selectedCityId] || {};
@@ -35,9 +36,11 @@ export default function SlangPhrasebook({ selectedCityId }: SlangPhrasebookProps
   // Speech synthesis speaker
   const speakText = (text: string, targetLanguage: string) => {
     if (!('speechSynthesis' in window)) {
-      alert('Speech synthesis not supported in this browser.');
+      setSpeechError('Speech synthesis is not supported in this browser or environment.');
       return;
     }
+
+    setSpeechError(null);
 
     window.speechSynthesis.cancel(); // Stop current speech
     const utterance = new SpeechSynthesisUtterance(text);
@@ -124,6 +127,17 @@ export default function SlangPhrasebook({ selectedCityId }: SlangPhrasebookProps
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8" id="phrasebook-section">
       {/* Phrasebook and Categories */}
       <div className="lg:col-span-7 space-y-6">
+        {speechError && (
+          <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 p-3.5 rounded-xl text-xs flex justify-between items-center">
+            <span>⚠️ {speechError}</span>
+            <button 
+              onClick={() => setSpeechError(null)}
+              className="text-[10px] font-bold underline ml-2 hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-display font-semibold text-white">Football Fan Phrasebook</h2>
@@ -146,7 +160,7 @@ export default function SlangPhrasebook({ selectedCityId }: SlangPhrasebookProps
             return (
               <button
                 key={cat.id}
-                onClick={() => setActiveCategory(cat.id as any)}
+                onClick={() => setActiveCategory(cat.id as 'matchday' | 'food_drink' | 'transit' | 'chants' | 'emergencies')}
                 className={`p-3 rounded-xl border text-center transition-all flex flex-col items-center justify-center gap-1.5 ${
                   isSelected
                     ? 'border-blue-500 bg-blue-500/10 text-blue-400 shadow-lg'

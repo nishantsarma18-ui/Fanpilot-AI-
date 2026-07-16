@@ -128,4 +128,36 @@ describe('Offline AI Copilot - Smart Local Responder', () => {
       expect(response).toContain('Exposición Station');
     });
   });
+
+  describe('Edge Case Groundings, Case-Insensitivity & Defaults', () => {
+    it('should fall back to general World Cup rules for an unknown city ID', () => {
+      const response = getSmartLocalResponse('any bag rule?', 'invalid_city_id');
+      expect(response).toContain('FIFA World Cup 2026 Matchday Fan Guide');
+      expect(response).toContain('Clear Bag Policy');
+    });
+
+    it('should handle case insensitivity correctly (uppercase keywords)', () => {
+      const response = getSmartLocalResponse('WHERE IS THE PARK OR CAR GARAGE?', 'new_york');
+      expect(response).toContain('MetLife Stadium Parking Guide');
+    });
+
+    it('should handle case insensitivity for bag policies correctly', () => {
+      const response = getSmartLocalResponse('Is there a strict BAG policy?', 'new_york');
+      expect(response).toContain('MetLife Stadium Bag Policy');
+    });
+
+    it('should return Canadian specialties for food questions in Vancouver', () => {
+      const response = getSmartLocalResponse('what food or beer can I get inside?', 'vancouver');
+      expect(response).toContain('Canadian Specialties');
+      expect(response).toContain('Poutine');
+      expect(response).toContain('Japadog');
+    });
+
+    it('should return Mexican barbecue details for food questions in Monterrey', () => {
+      const response = getSmartLocalResponse('food or local eats', 'monterrey');
+      expect(response).toContain('Regio BBQ Feast');
+      expect(response).toContain('Cabrito');
+      expect(response).toContain('Arrachera');
+    });
+  });
 });
