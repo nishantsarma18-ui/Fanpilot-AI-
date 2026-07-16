@@ -20,7 +20,7 @@ app.use((req, res, next) => {
 });
 
 // Function to load the Gemini API key from multiple sources with high convenience for Netlify and custom deployments
-function loadApiKey(): string | undefined {
+export function loadApiKey(): string | undefined {
   // 1. Prioritize environment variable (e.g. set in Netlify / Cloud Run dashboard or local .env)
   if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MOCK_KEY') {
     return process.env.GEMINI_API_KEY;
@@ -310,7 +310,7 @@ app.post('/api/navigation', async (req, res) => {
 });
 
 // 3. AI Copilot Stadium Assistant Chat API
-function getSmartLocalResponse(query: string, cityId: string): string {
+export function getSmartLocalResponse(query: string, cityId: string): string {
   const q = query.toLowerCase();
   
   // MetLife Stadium (new_york)
