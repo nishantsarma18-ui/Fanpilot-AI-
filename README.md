@@ -40,6 +40,11 @@ Your private stadium concierge available at all times:
 * **Playbook Grounded Chat**: Multi-turn chat interface directly integrated with official stadium handbooks. Answers specific questions on parking structures, cashless payment policies, camera rules, and security guidelines.
 * **Quick-Prompt Selector**: Rapidly asks pre-composed questions with one-tap shortcuts to speed up queries when walking through crowded turnstiles.
 
+### 🌓 5. Fluid Light & Dark Theme Customization
+An ultra-smooth toggle allowing supporters to switch modes instantly based on current matchday visibility constraints:
+* **Outdoor Precision**: High-contrast light mode crafted for bright daytime tailgates and stadium entry walks.
+* **Sleek Stadium Ambiance**: The default deep twilight dark mode designed for eye-safe matches under the lights.
+
 ---
 
 ## 🛠️ Technology & Architecture Stack
