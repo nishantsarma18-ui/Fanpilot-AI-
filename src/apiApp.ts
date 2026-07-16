@@ -1,16 +1,69 @@
 import express from 'express';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-// Initialize the server-side Google Gen AI client with proper telemetry headers
-const apiKey = process.env.GEMINI_API_KEY;
+// Middleware to normalize Netlify serverless function path routing and direct to Express api handlers
+app.use((req, res, next) => {
+  if (req.url.startsWith('/.netlify/functions/api')) {
+    req.url = req.url.replace('/.netlify/functions/api', '/api');
+  } else if (!req.url.startsWith('/api') && (req.url.startsWith('/copilot') || req.url.startsWith('/translate') || req.url.startsWith('/navigation'))) {
+    req.url = '/api' + req.url;
+  }
+  next();
+});
+
+// Function to load the Gemini API key from multiple sources with high convenience for Netlify and custom deployments
+function loadApiKey(): string | undefined {
+  // 1. Prioritize environment variable (e.g. set in Netlify / Cloud Run dashboard or local .env)
+  if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MOCK_KEY') {
+    return process.env.GEMINI_API_KEY;
+  }
+
+  // 2. Check config.json in the project root
+  try {
+    const rootConfigPath = path.join(process.cwd(), 'config.json');
+    if (fs.existsSync(rootConfigPath)) {
+      const data = JSON.parse(fs.readFileSync(rootConfigPath, 'utf8'));
+      if (data.GEMINI_API_KEY && data.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE' && data.GEMINI_API_KEY.trim() !== '') {
+        return data.GEMINI_API_KEY.trim();
+      }
+    }
+  } catch (e) {
+    console.warn("Warning: Failed to parse root config.json:", e);
+  }
+
+  // 3. Check src/config.json
+  try {
+    const srcConfigPath = path.join(process.cwd(), 'src', 'config.json');
+    if (fs.existsSync(srcConfigPath)) {
+      const data = JSON.parse(fs.readFileSync(srcConfigPath, 'utf8'));
+      if (data.GEMINI_API_KEY && data.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE' && data.GEMINI_API_KEY.trim() !== '') {
+        return data.GEMINI_API_KEY.trim();
+      }
+    }
+  } catch (e) {
+    console.warn("Warning: Failed to parse src/config.json:", e);
+  }
+
+  // 4. Hardcoded key fallback - allow user to commit the key directly to their repository
+  const HARDCODED_API_KEY: string = ""; // Paste your key here (e.g. "AIzaSy...") to embed it inside the code
+  if (HARDCODED_API_KEY && HARDCODED_API_KEY.trim() !== "") {
+    return HARDCODED_API_KEY.trim();
+  }
+
+  return undefined;
+}
+
+const apiKey = loadApiKey();
 if (!apiKey) {
-  console.warn("Warning: GEMINI_API_KEY environment variable is not set. AI features will fail.");
+  console.warn("Warning: GEMINI_API_KEY could not be loaded from process.env, config.json, or code fallback.");
 }
 
 const ai = new GoogleGenAI({
@@ -262,6 +315,13 @@ function getSmartLocalResponse(query: string, cityId: string): string {
   
   // MetLife Stadium (new_york)
   if (cityId === 'new_york') {
+    if (q.includes('parking') || q.includes('park') || q.includes('car') || q.includes('garage') || q.includes('lot') || q.includes('drive')) {
+      return `🚗 **MetLife Stadium Parking Guide (New York/New Jersey):**
+• **Pre-Purchase Mandatory:** All parking passes must be purchased online in advance. No drive-up or cash parking is sold at the gate.
+• **Parking Lots:** General parking lots typically open **5 hours prior** to kickoff. 
+• **Tailgating:** Permitted in all stadium parking lots, provided you stay within your designated single parking space. No open flames are allowed near the stadium.
+• **Rideshare Drop-off:** Designated rideshare zone (Uber/Lyft/Taxi) is located in **Lot E** off Route 120. Post-game delays are severe, so train transit is highly recommended over driving.`;
+    }
     if (q.includes('bag') || q.includes('pack') || q.includes('purse') || q.includes('clutch') || q.includes('bring') || q.includes('allow') || q.includes('restrict')) {
       return `🎒 **MetLife Stadium Bag Policy (New York/New Jersey):**
 • **Strict Clear Bag Policy:** Only clear plastic, vinyl, or PVC bags not exceeding **12" x 6" x 12"** are allowed.
@@ -269,12 +329,11 @@ function getSmartLocalResponse(query: string, cityId: string): string {
 • **Prohibited Bags:** Standard backpacks, diaper bags, laptop bags, briefcases, and coolers are strictly banned.
 • **Storage:** There are portable bag-check trailers located outside the Verizon, MetLife, and Pepsi gates for a small fee if your bag exceeds regulations.`;
     }
-    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi') || q.includes('drive') || q.includes('parking') || q.includes('car')) {
+    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi')) {
       return `🚇 **MetLife Stadium Transit Guide:**
 • **NJ Transit Rail (Highly Recommended):** Take the Meadowlands Rail Line directly from **New York Penn Station** or **Secaucus Junction** straight to the stadium station. This is by far the fastest and most reliable route.
 • **Coach USA 351 Bus:** Board the 351 Express Bus at Port Authority Bus Terminal (NYC) for a direct express trip to the stadium lot.
-• **Rideshare (Uber/Lyft):** Designated pickup/drop-off is in **Lot E**. Note that post-match traffic is notoriously heavy and wait times often exceed 90 minutes. Taking the train is highly recommended.
-• **Parking:** Pre-purchasing stadium parking passes online is mandatory. Drive-up parking is not available.`;
+• **Rideshare (Uber/Lyft):** Designated pickup/drop-off is in **Lot E**. Note that post-match traffic is notoriously heavy and wait times often exceed 90 minutes. Taking the train is highly recommended.`;
     }
     if (q.includes('food') || q.includes('eat') || q.includes('drink') || q.includes('beer') || q.includes('special') || q.includes('concession') || q.includes('tasty') || q.includes('dine') || q.includes('cash') || q.includes('pay') || q.includes('card')) {
       return `🍔 **MetLife Stadium Dining & Payment Guide:**
@@ -306,6 +365,13 @@ function getSmartLocalResponse(query: string, cityId: string): string {
 
   // Estadio Azteca (mexico_city)
   if (cityId === 'mexico_city') {
+    if (q.includes('parking') || q.includes('park') || q.includes('car') || q.includes('garage') || q.includes('lot') || q.includes('drive')) {
+      return `🚗 **Estadio Azteca Parking Guide (Mexico City):**
+• **Extremely Limited Parking:** On-site parking is highly restricted and gets completely congested hours before kick-off.
+• **Arrive Early:** If you must drive, arrive at least **3 to 4 hours early** to secure a space in the official stadium perimeter lots.
+• **Cost:** Expect a cash parking fee (in Mexican Pesos) at the stadium gates. Keep small bills handy.
+• **Alternative (Highly Recommended):** Avoid driving entirely if possible. Taking the **Tren Ligero (Light Rail)** from Tasqueña station straight to the Estadio Azteca station is much faster and hassle-free.`;
+    }
     if (q.includes('bag') || q.includes('pack') || q.includes('purse') || q.includes('clutch') || q.includes('bring') || q.includes('allow') || q.includes('restrict')) {
       return `🎒 **Estadio Azteca Bag Policy (Mexico City):**
 • **Clear Bags Only:** Only clear plastic, vinyl, or PVC bags not exceeding **30x15x30 cm** are permitted.
@@ -313,7 +379,7 @@ function getSmartLocalResponse(query: string, cityId: string): string {
 • **Prohibited Items:** Backpacks, duffel bags, briefcases, and professional cameras with detachable lenses are strictly banned.
 • **Storage:** Limited locker/luggage check services are available outside the stadium main gates for a small fee.`;
     }
-    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi') || q.includes('drive') || q.includes('parking') || q.includes('car')) {
+    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi')) {
       return `🚇 **Estadio Azteca Transit Guide:**
 • **Subway & Light Rail (Recommended):** Take Metro Line 2 (Blue Line) to the southern terminus **Tasqueña station**, then transfer immediately to the **Tren Ligero (Light Rail)** to the **Estadio Azteca station**.
 • **Traffic Warning:** Traffic in the south of Mexico City is exceptionally heavy. Leave downtown at least **2 hours** prior to kick-off.
@@ -346,13 +412,20 @@ function getSmartLocalResponse(query: string, cityId: string): string {
 
   // SoFi Stadium (los_angeles)
   if (cityId === 'los_angeles') {
+    if (q.includes('parking') || q.includes('park') || q.includes('car') || q.includes('garage') || q.includes('lot') || q.includes('drive')) {
+      return `🚗 **SoFi Stadium Parking Guide (Los Angeles):**
+• **100% Pre-Booked Only:** Parking passes must be booked online in advance via the SoFi Stadium site. Drive-up parking is not available.
+• **Zones:** Parking is divided into color zones (Blue, Green, Brown, Orange, Red, Pink). Make sure to navigate directly to your assigned zone's gate.
+• **Tailgating:** Tailgating is **only** allowed in designated spaces within the **Pink Zone** parking lots (Lots L, N, P) with a valid tailgating parking permit.
+• **Rideshare:** Located at the transit center on Prairie Avenue (between Kelso St and Hardy St).`;
+    }
     if (q.includes('bag') || q.includes('pack') || q.includes('purse') || q.includes('clutch') || q.includes('bring') || q.includes('allow') || q.includes('restrict')) {
       return `🎒 **SoFi Stadium Bag Policy (Los Angeles):**
 • **Strict NFL Clear Bag Policy:** Only clear plastic, vinyl, or PVC bags max **12" x 6" x 12"** are allowed.
 • **Small Clutches:** One non-clear clutch or wristlet under **4.5" x 6.5"** is permitted.
 • **Prohibited:** Backpacks, diaper bags, clear backpacks with multiple pockets, and fanny packs are strictly prohibited.`;
     }
-    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi') || q.includes('drive') || q.includes('parking') || q.includes('car')) {
+    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi')) {
       return `🚇 **SoFi Stadium Transit Guide:**
 • **Metro & Shuttle (Recommended):** Take the **Metro C Line** to Hawthorne/Lennox Station or the **K Line** to Downtown Inglewood, then hop on the free dedicated stadium shuttle buses.
 • **Rideshare (Uber/Lyft):** Designated zone is at the transit center on Prairie Avenue. Traffic post-game is heavy; prepare for high surge pricing.
@@ -383,13 +456,19 @@ function getSmartLocalResponse(query: string, cityId: string): string {
 
   // BC Place (vancouver)
   if (cityId === 'vancouver') {
+    if (q.includes('parking') || q.includes('park') || q.includes('car') || q.includes('garage') || q.includes('lot') || q.includes('drive')) {
+      return `🚗 **BC Place Parking Guide (Vancouver):**
+• **No On-Site Public Parking:** BC Place does not have public parking lots on-site during major matchdays.
+• **Nearby Lots:** Limited pay-parking garages are available in the surrounding Yaletown and Gastown downtown areas, but they fill up fast and have high event-day rates.
+• **Alternative Transit (Best option):** Park further away at a SkyTrain station with a "Park & Ride" lot, and take the SkyTrain directly to **Stadium-Chinatown** or **Yaletown-Roundhouse** station. It's cheap, fast, and traffic-free.`;
+    }
     if (q.includes('bag') || q.includes('pack') || q.includes('purse') || q.includes('clutch') || q.includes('bring') || q.includes('allow') || q.includes('restrict')) {
       return `🎒 **BC Place Bag Policy (Vancouver):**
 • **Clear Bags Only:** Only clear plastic bags not exceeding **12" x 6" x 12"** are allowed.
 • **Small Clutches:** One small non-clear clutch or wristlet up to **4.5" x 6.5"** is permitted.
 • **Banned Bags:** Backpacks, diaper bags, briefcases, and luggage are strictly prohibited inside the stadium.`;
     }
-    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi') || q.includes('drive') || q.includes('parking') || q.includes('car')) {
+    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi')) {
       return `🚇 **BC Place Transit Guide:**
 • **SkyTrain (Excellent & Fast):** Take the SkyTrain Expo Line directly to the **Stadium-Chinatown Station** or Canada Line to **Yaletown-Roundhouse Station**. Both are under a 5-minute walk.
 • **Highly Walkable:** BC Place is located right in the downtown peninsula and is extremely walkable from most downtown hotels.
@@ -421,12 +500,18 @@ function getSmartLocalResponse(query: string, cityId: string): string {
 
   // Estadio BBVA (monterrey)
   if (cityId === 'monterrey') {
+    if (q.includes('parking') || q.includes('park') || q.includes('car') || q.includes('garage') || q.includes('lot') || q.includes('drive')) {
+      return `🚗 **Estadio BBVA Parking Guide (Monterrey):**
+• **Permit Holders Only:** On-site parking lots at "El Gigante de Acero" are strictly reserved for season ticket holders and pre-purchased parking pass holders.
+• **No Cash Parking:** There is no cash public parking available at the stadium gates on matchday.
+• **Where to Park:** Fans without permits are advised to park in secure public parking garages in downtown Monterrey or near **Metro Line 1 stations (such as Exposición)** and walk or take the metro.`;
+    }
     if (q.includes('bag') || q.includes('pack') || q.includes('purse') || q.includes('clutch') || q.includes('bring') || q.includes('allow') || q.includes('restrict')) {
       return `🎒 **Estadio BBVA Bag Policy (Monterrey):**
 • **Small Clear Bags Only:** Bags must be clear and not exceed **30 x 30 cm** in size.
 • **Banned:** Backpacks, large duffels, briefcases, and large umbrellas are strictly prohibited. Clutch purses under **11.5x16.5 cm** are permitted.`;
     }
-    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi') || q.includes('drive') || q.includes('parking') || q.includes('car')) {
+    if (q.includes('transit') || q.includes('train') || q.includes('subway') || q.includes('bus') || q.includes('get to') || q.includes('transport') || q.includes('route') || q.includes('direction') || q.includes('uber') || q.includes('rideshare') || q.includes('taxi')) {
       return `🚇 **Estadio BBVA Transit Guide:**
 • **Metro Line 1 (Recommended):** Take Metro Line 1 directly to **Exposición Station**. From there, follow the safe, shaded, and dedicated 15-minute walking corridor straight to the stadium entrance.
 • **Congestion warning:** Rideshares (Uber/DiDi) are available but Avenida Pablo Livas experiences intense bumper-to-bumper congestion. Walking from the Metro is much faster!`;
