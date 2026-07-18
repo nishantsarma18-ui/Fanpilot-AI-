@@ -1,3 +1,4 @@
+import express from 'express';
 import { app } from './src/apiApp.js';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
@@ -23,7 +24,6 @@ async function startServer() {
 }
 
 // Helper to serve static files for SPA in production
-import express from 'express';
 function expressStaticFallback(distPath: string) {
   const router = express.Router();
   router.use(express.static(distPath));

@@ -19,7 +19,7 @@ export function securityAndRoutingMiddleware(req: Request, res: Response, next: 
 }
 
 // Helper to safely clean and parse JSON response from LLM, removing any markdown formatting backticks
-export function parseCleanJson(text: string): any {
+export function parseCleanJson<T = unknown>(text: string): T {
   let cleaned = text.trim();
   if (cleaned.startsWith('```json')) {
     cleaned = cleaned.substring(7);
@@ -29,5 +29,5 @@ export function parseCleanJson(text: string): any {
   if (cleaned.endsWith('```')) {
     cleaned = cleaned.substring(0, cleaned.length - 3);
   }
-  return JSON.parse(cleaned.trim());
+  return JSON.parse(cleaned.trim()) as T;
 }

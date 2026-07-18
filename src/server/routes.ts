@@ -3,8 +3,64 @@ import { ai, Type } from './gemini.js';
 import { apiKey } from './config.js';
 import { stadiumKnowledge, getSmartLocalResponse } from './stadiumData.js';
 import { parseCleanJson } from './middleware.js';
+import { ItineraryItem } from '../types.js';
 
 const router = express.Router();
+
+// Helper to generate a consistent, robust match-day fallback timeline when AI is offline
+function getNavigationFallback(
+  stadiumName: string,
+  hotelLocation: string,
+  transportMode: string,
+  matchTime: string
+): ItineraryItem[] {
+  const fallbackTime = matchTime || '18:00';
+  const hour = parseInt(fallbackTime.split(':')[0]) || 18;
+  const min = fallbackTime.split(':')[1] || '00';
+
+  return [
+    {
+      id: 'fallback_1',
+      time: `${hour - 3}:${min}`,
+      activity: `Leave hotel at ${hotelLocation} and head to transit using ${transportMode}. Carry only clear bags.`,
+      location: hotelLocation,
+      type: 'transit',
+      completed: false
+    },
+    {
+      id: 'fallback_2',
+      time: `${hour - 2}:${min}`,
+      activity: `Arrive near ${stadiumName}. Follow volunteer signs towards security gates. Keep ticket QR code ready on phone.`,
+      location: `${stadiumName} Outer Plaza`,
+      type: 'transit',
+      completed: false
+    },
+    {
+      id: 'fallback_3',
+      time: `${hour - 1}:15`,
+      activity: `Pass through security screening and bag checks. Scan ticket to enter stadium concourse.`,
+      location: `${stadiumName} Security Gates`,
+      type: 'stadium',
+      completed: false
+    },
+    {
+      id: 'fallback_4',
+      time: `${hour - 0}:45`,
+      activity: `Locate food/drink concession stands and pick up local World Cup specialties! Then navigate to your seat row.`,
+      location: `${stadiumName} Concourse`,
+      type: 'social',
+      completed: false
+    },
+    {
+      id: 'fallback_5',
+      time: fallbackTime,
+      activity: `KICKOFF! Enjoy the electric World Cup atmosphere and cheer responsibly!`,
+      location: `${stadiumName} Seats`,
+      type: 'match',
+      completed: false
+    }
+  ];
+}
 
 // 1. Translation & Slang Coach API
 router.post('/translate', async (req, res) => {
@@ -69,7 +125,14 @@ router.post('/translate', async (req, res) => {
       throw new Error('No content returned from Gemini API');
     }
 
-    const data = parseCleanJson(resultText);
+    interface TranslationResponse {
+      translation: string;
+      phonetic: string;
+      contextExplanation: string;
+      footballTermTip: string;
+    }
+
+    const data = parseCleanJson<TranslationResponse>(resultText);
     res.json(data);
   } catch (error: any) {
     console.error('Translation error:', error);
@@ -131,52 +194,7 @@ router.post('/navigation', async (req, res) => {
 
   // Return a direct offline fallback if no API key is set
   if (!apiKey || apiKey === 'MOCK_KEY') {
-    const fallbackTime = matchTime;
-    const hour = parseInt(fallbackTime.split(':')[0]) || 18;
-    const min = fallbackTime.split(':')[1] || '00';
-
-    return res.json([
-      {
-        id: 'fallback_1',
-        time: `${hour - 3}:${min}`,
-        activity: `Leave hotel at ${hotelLocation} and head to transit using ${transportMode}. Carry only clear bags.`,
-        location: hotelLocation,
-        type: 'transit',
-        completed: false
-      },
-      {
-        id: 'fallback_2',
-        time: `${hour - 2}:${min}`,
-        activity: `Arrive near ${stadiumName}. Follow volunteer signs towards security gates. Keep ticket QR code ready on phone.`,
-        location: `${stadiumName} Outer Plaza`,
-        type: 'transit',
-        completed: false
-      },
-      {
-        id: 'fallback_3',
-        time: `${hour - 1}:15`,
-        activity: `Pass through security screening and bag checks. Scan ticket to enter stadium concourse.`,
-        location: `${stadiumName} Security Gates`,
-        type: 'stadium',
-        completed: false
-      },
-      {
-        id: 'fallback_4',
-        time: `${hour - 0}:45`,
-        activity: `Locate food/drink concession stands and pick up local World Cup specialties! Then navigate to your seat row.`,
-        location: `${stadiumName} Concourse`,
-        type: 'social',
-        completed: false
-      },
-      {
-        id: 'fallback_5',
-        time: fallbackTime,
-        activity: `KICKOFF! Enjoy the electric World Cup atmosphere and cheer responsibly!`,
-        location: `${stadiumName} Seats`,
-        type: 'match',
-        completed: false
-      }
-    ]);
+    return res.json(getNavigationFallback(stadiumName, hotelLocation, transportMode, matchTime));
   }
 
   try {
@@ -209,57 +227,12 @@ router.post('/navigation', async (req, res) => {
       throw new Error('No timeline returned from Gemini API');
     }
 
-    const data = parseCleanJson(resultText);
+    const data = parseCleanJson<ItineraryItem[]>(resultText);
     res.json(data);
   } catch (error: any) {
     console.error('Itinerary generation error:', error);
     // Return a solid fallback schedule so the user is never left hanging
-    const fallbackTime = matchTime || '18:00';
-    const hour = parseInt(fallbackTime.split(':')[0]) || 18;
-    const min = fallbackTime.split(':')[1] || '00';
-
-    res.json([
-      {
-        id: 'fallback_1',
-        time: `${hour - 3}:${min}`,
-        activity: `Leave hotel at ${hotelLocation} and head to transit using ${transportMode}. Carry only clear bags.`,
-        location: hotelLocation,
-        type: 'transit',
-        completed: false
-      },
-      {
-        id: 'fallback_2',
-        time: `${hour - 2}:${min}`,
-        activity: `Arrive near ${stadiumName}. Follow volunteer signs towards security gates. Keep ticket QR code ready on phone.`,
-        location: `${stadiumName} Outer Plaza`,
-        type: 'transit',
-        completed: false
-      },
-      {
-        id: 'fallback_3',
-        time: `${hour - 1}:15`,
-        activity: `Pass through security screening and bag checks. Scan ticket to enter stadium concourse.`,
-        location: `${stadiumName} Security Gates`,
-        type: 'stadium',
-        completed: false
-      },
-      {
-        id: 'fallback_4',
-        time: `${hour - 0}:45`,
-        activity: `Locate food/drink concession stands and pick up local World Cup specialties! Then navigate to your seat row.`,
-        location: `${stadiumName} Concourse`,
-        type: 'social',
-        completed: false
-      },
-      {
-        id: 'fallback_5',
-        time: fallbackTime,
-        activity: `KICKOFF! Enjoy the electric World Cup atmosphere and cheer responsibly!`,
-        location: `${stadiumName} Seats`,
-        type: 'match',
-        completed: false
-      }
-    ]);
+    res.json(getNavigationFallback(stadiumName, hotelLocation, transportMode, matchTime));
   }
 });
 
